@@ -1,0 +1,88 @@
+name: 'npm-why-slow'
+description: 'Analyze which npm packages are slowing down your install times'
+author: 'willzhangfly'
+
+branding:
+  icon: 'clock'
+  color: 'yellow'
+
+inputs:
+  path:
+    description: 'Path to the project directory'
+    required: false
+    default: '.'
+  threshold:
+    description: 'Only report packages taking longer than this (seconds)'
+    required: false
+    default: '5'
+  fail-on-slow:
+    description: 'Fail the action if slow packages are found'
+    required: false
+    default: 'false'
+  max-time:
+    description: 'Maximum allowed install time before failing (seconds)'
+    required: false
+    default: '120'
+  deep-scan:
+    description: 'Scan node_modules for transitive dependencies'
+    required: false
+    default: 'false'
+
+outputs:
+  slow-count:
+    description: 'Number of slow packages found'
+  total-time:
+    description: 'Estimated total slow time in seconds'
+  has-slow-packages:
+    description: 'Whether slow packages were found (true/false)'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Run npm-why-slow
+      id: analyze
+      shell: bash
+      run: |
+        cd "${{ inputs.path }}"
+
+        # Build command with options
+        CMD="npx npm-why-slow@latest --json"
+
+        if [ "${{ inputs.threshold }}" != "5" ]; then
+          CMD="$CMD --threshold ${{ inputs.threshold }}"
+        fi
+
+        if [ "${{ inputs.deep-scan }}" = "true" ]; then
+          CMD="$CMD --deep"
+        fi
+
+        # Run analysis
+        $CMD > /tmp/npm-why-slow-result.json
+
+        # Extract outputs
+        SLOW_COUNT=$(jq '.slowPackages | length' /tmp/npm-why-slow-result.json)
+        TOTAL_TIME=$(jq '.estimatedTotalTime' /tmp/npm-why-slow-result.json)
+        HAS_SLOW=$([ "$SLOW_COUNT" -gt 0 ] && echo "true" || echo "false")
+
+        echo "slow-count=$SLOW_COUNT" >> $GITHUB_OUTPUT
+        echo "total-time=$TOTAL_TIME" >> $GITHUB_OUTPUT
+        echo "has-slow-packages=$HAS_SLOW" >> $GITHUB_OUTPUT
+
+        # Display human-readable output
+        npx npm-why-slow@latest ${{ inputs.threshold != '5' && format('--threshold {0}', inputs.threshold) || '' }} ${{ inputs.deep-scan == 'true' && '--deep' || '' }}
+
+        # Check failure conditions
+        if [ "${{ inputs.fail-on-slow }}" = "true" ] && [ "$SLOW_COUNT" -gt 0 ]; then
+          echo "::error::Found $SLOW_COUNT slow package(s)"
+          exit 1
+        fi
+
+        if [ "$TOTAL_TIME" -gt "${{ inputs.max-time }}" ]; then
+          echo "::error::Total install time ($TOTAL_TIME s) exceeds maximum (${{ inputs.max-time }} s)"
+          exit 1
+        fi

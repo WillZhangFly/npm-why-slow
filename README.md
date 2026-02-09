@@ -16,10 +16,15 @@
 ## Features
 
 ✅ **Instant analysis** (< 1 second, no reinstallation needed)
-✅ **Smart heuristics** based on known slow packages
+✅ **Deep scanning** - Scans node_modules for transitive dependencies
+✅ **Lockfile analysis** - Parses package-lock.json and yarn.lock
+✅ **Dynamic detection** - Detects native modules (node-gyp, binding.gyp)
+✅ **Size analysis** - Shows disk usage of largest packages
+✅ **Measurement mode** - Actually time installs for accuracy
+✅ **GitHub Action** - Block PRs that add slow dependencies
+✅ **README badges** - Show install time in your project
+✅ **CI-friendly output** - Markdown reports for pull requests
 ✅ **Actionable suggestions** with specific alternatives
-✅ **Beautiful terminal output** with clear priorities
-✅ **Zero configuration** — just run it
 ✅ **Actively maintained** (unlike slow-deps)
 
 ## Installation
@@ -46,14 +51,98 @@ npx npm-why-slow
 # Analyze specific directory
 npx npm-why-slow --path ./my-project
 
-# Show all packages (not just slow ones)
-npx npm-why-slow --all
-
 # Only show packages taking > 10 seconds
 npx npm-why-slow --threshold 10
 
 # Output as JSON (for CI/CD)
 npx npm-why-slow --json
+```
+
+### Deep Scan Mode
+
+Scan node_modules and lockfiles for transitive slow dependencies:
+
+```bash
+npx npm-why-slow --deep
+```
+
+This will:
+- Scan all packages in node_modules
+- Detect native modules (binding.gyp, node-gyp)
+- Parse package-lock.json/yarn.lock for install scripts
+- Show disk space usage
+
+### Measurement Mode
+
+Actually time package installations for accurate results:
+
+```bash
+npx npm-why-slow --measure
+```
+
+⚠️ This is slower as it installs packages in temporary directories.
+
+### README Badge
+
+Generate a badge showing your project's install time:
+
+```bash
+npx npm-why-slow --badge
+```
+
+Output:
+```
+📛 README Badge:
+
+Found 3 slow packages adding ~87s to install time
+
+Markdown:
+![Install Time](https://img.shields.io/badge/install%20time-~87s-orange?style=flat)
+
+HTML:
+<img alt="Install Time" src="https://img.shields.io/badge/install%20time-~87s-orange?style=flat" />
+```
+
+### CI/CD Integration
+
+Generate a markdown report for pull requests:
+
+```bash
+npx npm-why-slow --ci
+```
+
+## GitHub Action
+
+Add this workflow to automatically check PRs for slow dependencies:
+
+```yaml
+# .github/workflows/check-install-time.yml
+name: Check Install Time
+
+on:
+  pull_request:
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: willzhangfly/npm-why-slow@v1
+        with:
+          threshold: 10        # Only report packages > 10s
+          max-time: 120        # Fail if total > 2 minutes
+          deep-scan: true      # Scan transitive dependencies
+```
+
+Or use the reusable action:
+
+```yaml
+- uses: willzhangfly/npm-why-slow@v1
+  with:
+    fail-on-slow: true  # Fail if any slow packages found
 ```
 
 ## Example Output
@@ -63,6 +152,15 @@ npx npm-why-slow --json
 
 Analyzing 247 packages...
 
+Lockfile: npm (1,432 dependencies)
+Packages with install scripts: 12
+node_modules size: 245.3 MB
+
+Largest packages by disk size:
+  @tensorflow/tfjs-node: 89.2 MB
+  electron: 67.1 MB
+  puppeteer: 45.3 MB
+
 Slowest packages:
 ┌─────┬────────────────────────────────┬────────────┬─────────────────────────────┐
 │ #   │ Package                        │ Est. Time  │ Reason                      │
@@ -70,9 +168,10 @@ Slowest packages:
 │ 1   │ puppeteer                      │ ~45s       │ downloads large binary      │
 │ 2   │ @tensorflow/tfjs-node          │ ~30s       │ native compilation          │
 │ 3   │ sharp                          │ ~12s       │ native compilation          │
+│ 4   │ my-native-addon                │ ~10s       │ native compilation          │
 └─────┴────────────────────────────────┴────────────┴─────────────────────────────┘
 
-Estimated slow time: ~87s
+Estimated slow time: ~97s
 
 💡 Suggestions:
 
@@ -90,28 +189,41 @@ Potential savings: ~87s (60% faster install!)
 
 ## How It Works
 
-`npm-why-slow` uses **smart heuristics** to identify slow packages:
+`npm-why-slow` uses multiple strategies to identify slow packages:
 
-1. **Known slow packages database** - Maintains a curated list of packages known to be slow (puppeteer, sharp, electron, etc.)
-2. **Binary downloads** - Identifies packages that download large binaries (browsers, drivers)
-3. **Native compilation** - Detects packages requiring node-gyp and native compilation
-4. **Large dependency trees** - Flags packages with thousands of dependencies
+1. **Known slow packages database** - Curated list of packages known to be slow (puppeteer, sharp, electron, etc.)
+2. **Dynamic detection** - Scans for `binding.gyp` files and `node-gyp` dependencies
+3. **Lockfile analysis** - Parses lockfiles for packages with install scripts
+4. **Size analysis** - Large packages with postinstall scripts are flagged
+5. **Optional measurement** - Actually time installs for ground truth
 
-**No reinstallation required** — analysis completes in under 1 second!
+## CLI Options
+
+```
+Options:
+  -p, --path <dir>          Project directory to analyze (default: cwd)
+  --json                    Output results as JSON
+  --all                     Show all packages, not just slow ones
+  --threshold <seconds>     Only show packages above threshold (default: 5)
+  --deep                    Deep scan node_modules and lockfiles
+  --measure                 Actually measure install times (slow but accurate)
+  --badge                   Generate README badge for install time
+  --ci                      CI-friendly markdown output
+  -V, --version             Output version number
+  -h, --help                Display help
+```
 
 ## vs. Other Tools
 
-### vs. slow-deps
-- ❌ **slow-deps**: Reinstalls each package separately (takes hours!)
-- ✅ **npm-why-slow**: Instant analysis using heuristics
-- ❌ **slow-deps**: Unmaintained since 2019
-- ✅ **npm-why-slow**: Actively maintained
-
-### vs. npm --timing
-- ❌ **npm --timing**: Only shows high-level phases
-- ✅ **npm-why-slow**: Shows per-package estimates
-- ❌ **npm --timing**: No suggestions
-- ✅ **npm-why-slow**: Actionable alternatives
+| Feature | npm-why-slow | slow-deps | Bundlephobia |
+|---------|--------------|-----------|--------------|
+| Speed | Instant | Hours | N/A |
+| Transitive deps | ✅ (--deep) | ✅ | ✅ |
+| Measurement mode | ✅ (--measure) | ✅ | ❌ |
+| GitHub Action | ✅ | ❌ | ❌ |
+| Actively maintained | ✅ | ❌ (2019) | ✅ |
+| Install time focus | ✅ | ✅ | ❌ |
+| Size analysis | ✅ | ❌ | ✅ |
 
 ## Slow Packages Database
 
@@ -128,76 +240,18 @@ Includes analysis for:
 **Large Dependencies:**
 - aws-sdk, @angular/cli, webpack
 
-## CLI Options
-
-```
-Options:
-  -p, --path <dir>          Project directory to analyze (default: cwd)
-  --json                    Output results as JSON
-  --all                     Show all packages, not just slow ones
-  --threshold <seconds>     Only show packages above threshold (default: 5)
-  -V, --version             Output version number
-  -h, --help                Display help
-```
-
-## Example Scenarios
-
-### Scenario 1: Project with Puppeteer
-
-```bash
-$ npm-why-slow
-
-📊 Install Time Analysis:
-
-Slowest packages:
-1. puppeteer        ~45s  (downloads Chromium browser)
-
-💡 Suggestions:
-  🔥 Replace puppeteer → puppeteer-core
-     Savings: ~45s
-     Note: Bring your own browser
-```
-
-### Scenario 2: Clean Project
-
-```bash
-$ npm-why-slow
-
-📊 Install Time Analysis:
-
-✅ Great news! No obviously slow packages detected.
-
-Your dependencies look well-optimized for install speed.
-```
-
-### Scenario 3: Multiple Issues
-
-```bash
-$ npm-why-slow
-
-📊 Install Time Analysis:
-
-Slowest packages:
-1. electron         ~40s  (downloads Electron binary)
-2. sharp            ~12s  (native compilation)
-3. node-sass        ~15s  (native compilation - DEPRECATED)
-
-Estimated slow time: ~67s
-
-💡 Suggestions:
-  🔥 Replace node-sass → sass
-     Savings: ~15s
-     Note: Dart Sass is officially recommended
-
-Potential savings: ~15s (22% faster!)
-```
+**Plus dynamic detection of:**
+- Any package with `binding.gyp`
+- Any package depending on `node-gyp`
+- Large packages with postinstall scripts
 
 ## Use Cases
 
 - 🚀 **Before adding dependencies** - Check if a package will slow down installs
 - 🔍 **Debug slow installs** - Identify the culprit quickly
-- 📊 **CI/CD optimization** - Reduce build times
+- 📊 **CI/CD optimization** - Block slow packages in PRs
 - 👥 **Team onboarding** - Faster setup for new developers
+- 📛 **Project badges** - Show install time in README
 
 ## Contributing
 
@@ -205,6 +259,7 @@ Contributions welcome! Especially:
 - Adding more slow packages to the database
 - Improving time estimates
 - Suggesting better alternatives
+- Improving detection heuristics
 
 ## Requirements
 
@@ -214,6 +269,7 @@ Contributions welcome! Especially:
 
 - [slow-deps](https://github.com/nolanlawson/slow-deps) - Original tool (unmaintained)
 - [import-cost-total](https://github.com/willzhangfly/import-cost-total) - Analyze bundle size impact
+- [Bundlephobia](https://bundlephobia.com) - Check package size online
 
 ## Support
 

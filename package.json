@@ -1,6 +1,6 @@
 {
   "name": "npm-why-slow",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Analyze which npm packages are slowing down your install times",
   "type": "module",
   "main": "./dist/index.js",

@@ -5,7 +5,8 @@ export type SlowReason =
   | 'postinstall'
   | 'binary-download'
   | 'native-compilation'
-  | 'large-deps';
+  | 'large-deps'
+  | 'measured';
 
 /**
  * Information about a slow package
@@ -41,6 +42,16 @@ export interface AnalysisResult {
   estimatedTotalTime: number; // in seconds
   potentialSavings: number; // in seconds
   suggestions: Suggestion[];
+  // Extended stats
+  nodeModulesStats?: {
+    totalSize: number;
+    largestPackages: Array<{ name: string; size: number }>;
+  };
+  lockfileStats?: {
+    lockfileType: string;
+    totalDeps: number;
+    installScriptCount: number;
+  };
 }
 
 /**
@@ -63,6 +74,10 @@ export interface CliOptions {
   json: boolean;
   all: boolean;
   threshold: number; // in seconds
+  deep: boolean; // scan node_modules
+  measure: boolean; // actually time installs
+  badge: boolean; // generate badge
+  ci: boolean; // CI-friendly output
 }
 
 /**
@@ -85,5 +100,5 @@ export interface LockFilePackage {
   resolved?: string;
   integrity?: string;
   hasInstallScript?: boolean;
-  dependencies?: Record<string, string>;
+  dependencies?: Record<string, LockFilePackage>;
 }
